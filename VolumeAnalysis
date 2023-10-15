@@ -1,0 +1,171 @@
+'Code in VBA
+
+Option Explicit
+
+Dim swApp As SldWorks.SldWorks
+Dim swDoc As SldWorks.ModelDoc2
+Dim swSketchManager As SldWorks.SketchManager
+Dim myMassProp As SldWorks.MassProperty
+Dim BoolStatus As Boolean
+Dim totalVolume As Double
+Dim filePath As String
+Dim fileName As String
+
+
+Sub 
+
+  Set swApp = Application.SldWorks
+  Dim defaultTemplate As String
+  defautlTemplate = swApp.GetUserPreferenceStringValue(swUserPreferenceStringValue.swDefaultTemplatePart)
+
+  set swDoc = swApp.ActiveDoc
+  set myMassProp = swDoc.Extension.CreateMassProperty
+
+  totalVolume = myMassProp.volume
+  filePath = swDoc.GetPathName()
+  fileName = Right(filePath.Len(filePath) - InStrRev(filePath,"¥"))
+
+  UserForm.Show
+
+End Sub
+
+Function CovertToMeters(By Val valueInMM As Double) As Double
+  ConvertToMeters = valueInMM / 1000
+End Function
+
+Public Sub StartAnalysis(InputStartPointX As Double, InputStartPointY As Double, InputLength As Double, InputWidth As Double, InputSqSize As Double)
+
+  Dim StartPointX As Double
+  Dim StartPointY As Double
+  Dim SqSize As Double
+  Dim Length As Double
+  Dim Width As Double
+
+  Set swSketchManager = swDoc.SketchManager
+
+  Dim vSketchLines As Variant
+
+  StartPointX = InputStartPointX
+  StartPointY = InputStartPointY
+  Length = InputLength
+  Width = InputWidth
+  SqSize = InputSqSize
+
+  StartPointX = CovertToMeters(InputStartPointX)
+  StartPointY = CovertToMeters(InputStartPointY)
+  Length = CovertToMeters(InputLength)
+  Width = CovertToMeters(InputWidth)
+  SqSize = CovertToMeters(InputSqSize)
+
+  Dim numSquaresX As Integer
+  Dim numSquaresY As Integer
+  numSquaresX = Int(Length / SqSize)
+  numeSquaresY = Int(Width / SqSize)
+
+  Dim i As Integer
+  Dim j As Integer
+
+  Dim x1 As Double
+  Dim x2 As Double
+  Dim y1 As Double
+  Dim y2 As Double
+  Dim volumeArray() As Variant
+
+  ReDim volumeArray(1 To numSquaresY, 1 To numSquaresX)
+  swDoc.ShowNamedView2 "*SideView", 4
+  swDoc.ViewZoomtofit2
+
+  For i = 1 To numSquaresX
+    For j = 1 To numSquaresY
+
+      swSketchManager.InsertSketch True
+      BoolStatus = swDoc.Extension.SelectByID2("Top Plane", "PLANE", 0, 0, 0, False, 0, Nothing, 0)
+      
+      'Upper-left point
+      x1 = SqSize * (i - 1) + StartPointX
+      y1 = -SqSize * (j - 1) + StartPointY
+      x2 = x1 + SqSize
+      y2 = y1 - SqSize
+
+      'Do the Mesh
+      vSketchLines = swSketchManager.CreateCornerRectangule(x1, y1, 0, x2, y2, 0)
+
+      'Cut
+      Dim myFeature As Object
+      Set myFeature = swDoc.FeatureManager.FeatureCut4(False, True, False, swEndCondThroughtAll, 1, 0.01, 0.01, False, False, False, False, 1, 1, False, False, False, False, False, True, True, True, True, False, 0, 0, False, False)
+      swDoc.SelectionManager.EnableContourSelection = False
+
+      'Get Volume and store it
+      Dim myMassProp As SldWorks.MassProperty
+      Set myMassProp = sw.¥Doc.Extension.CreateMassProperty
+
+      Dim volume As Double
+      volume = myMassProps.volume
+      volumeArray(j,i) = volume
+
+      If volumeArray(j,i) >= (totalVolume - totalVolume * 0.00001) Then
+        volumeArray(j,i)
+      End If 
+
+      Dim TT As Double
+      TT = volumeArray(j,i) / totalVolume
+
+      'Delet the Cut
+      swDoc.EditUndo2 1
+
+      Set myFeature = swDoc.FeatureManager.FeatureExtrusion3(True, False, False, swEndConditions_e.swEndCondBlind, swEndConditions_e.swEndCondBlind, TT, 0, False, False, False, True, 0, 0, False, False, False, False, False, True, True, swEndConditions_w.seEndCondBlinds, 0, False)
+      swDoc.SelectionManager.EnableContourSelection = False
+      swDoc.ClearSelection2 True
+      swSketchManager.InsertSketch True
+
+      Next j
+    Next i
+
+  swDoc.ClearSelection2 True
+  swDoc.ViewZoomtofit2
+
+
+'------------------------ Save the data in an excel
+Dim excelApp As Excel.Application
+Dim excelaWorkbook As Excel.Workbook
+Dim excelWorksheet As Excel.Worksheet
+
+'Create a New Excel App workbook and worksheet
+
+Set excelApp = Excel.Application
+Set excelWorksheet = excelApp.Workbook.Add
+Set excelWorksheet = excelWorkbook.Worksheets(1)
+
+excelWorksheet.Cells(1,2) = "Start X"
+excelWorksheet.Cells(1,3).Value = StartPointX
+
+excelWorksheet.Cells(2,2) = "Start Y"
+excelWorksheet.Cells(2,3).Value = StartPointY
+
+excelWorksheet.Cells(1,5) = "Mesh L"
+excelWorksheet.Cells(1,6).Value = Length
+
+excelWorksheet.Cells(2,5) = "Mesh W"
+excelWorksheet.Cells(2,6).Values = Width
+
+excelWorksheet.Cells(1,8) = "Square Size"
+excelWorksheet.Cells(1,9).Values = SqSize
+
+excelWorksheet.Cells(2,8) = "Total Volume"
+excelWorksheet.Cells(2,9).Value = totalVolume
+
+excelWorksheet.Cells(1,11) = "File Name"
+excelWorksheet.Cells(1,12).Value = fileName
+
+For i = 1 To numSquaresY
+  For j = 1 To numSquaresX
+    excelWorksheet.Cells(i + 4, j + 1).Values = CDbl(volumeArray(i,j))
+  Next j
+Next i
+
+excelWorkbook.SaveAs "C:......."   '------------------------ Save the doc in your own place with the name you want
+excelApp.Quit
+'------------------------ Save the data in an excel End
+End Sub
+
+
